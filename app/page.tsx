@@ -1,101 +1,198 @@
-import Image from "next/image";
+"use client";
+
+import { Application, Assets, Graphics, Renderer, Sprite } from "pixi.js";
+import { useEffect, useRef } from "react";
 
 export default function Home() {
+  const pixiContainerRef = useRef<HTMLDivElement>(null);
+  const appRef = useRef<Application | null>(null);
+  const leftPaddleRef = useRef<Graphics | null>(null);
+  const rightPaddleRef = useRef<Graphics | null>(null);
+  const keysPressed = useRef<Set<string>>(new Set());
+  const paddleHeight = 200;
+  const paddleWidth = 20;
+  const canvasWidth = 1000;
+  const paddlePadding = 10;
+  const paddleSpeed = 5;
+  let acceleration = 1;
+
+  useEffect(() => {
+    const func = async () => {
+      if (pixiContainerRef.current && !appRef.current) {
+        const app = new Application();
+        await app.init({
+          width: canvasWidth,
+          height: 600,
+          backgroundColor: "000000",
+          resolution: window.devicePixelRatio || 1,
+        });
+
+        appRef.current = app;
+
+        pixiContainerRef.current.appendChild(app.canvas);
+
+        renderPaddle(app, "left");
+        renderPaddle(app, "right");
+
+        await renderBunnyAsync(app);
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+          keysPressed.current.add(e.key);
+        };
+
+        const handleKeyUp = (e: KeyboardEvent) => {
+          acceleration = 1;
+          keysPressed.current.delete(e.key);
+        };
+
+        app.canvas.addEventListener("keydown", handleKeyDown);
+        app.canvas.addEventListener("keyup", handleKeyUp);
+
+        app.canvas.tabIndex = 1;
+        app.canvas.focus();
+
+        app.ticker.add(() => {
+          // We will need to update this so we can control both paddles
+          const paddleRef = rightPaddleRef;
+
+          if (!paddleRef.current) return;
+
+          if (keysPressed.current.has("ArrowUp")) {
+            paddleRef.current.y = Math.max(
+              0,
+              paddleRef.current.y - paddleSpeed - acceleration,
+            );
+            acceleration += Math.min(acceleration * 0.1, 1);
+          }
+
+          if (keysPressed.current.has("ArrowDown")) {
+            paddleRef.current.y = Math.min(
+              app.screen.height - paddleHeight, // paddle height,
+              paddleRef.current.y + paddleSpeed + acceleration,
+            );
+
+            acceleration += Math.min(acceleration * 0.1, 1);
+          }
+        });
+      }
+    };
+
+    func();
+  }, []);
+
+  const renderPaddle = (
+    app: Application<Renderer>,
+    whichOne: "left" | "right",
+  ) => {
+    const graphics = new Graphics();
+
+    const paddleYCoordinate = (app.screen.height - paddleHeight) / 2;
+
+    const paddleXCoordinate =
+      whichOne === "left"
+        ? paddlePadding
+        : app.screen.width - (paddlePadding + paddleWidth);
+
+    const paddle = graphics
+      .rect(0, 0, paddleWidth, paddleHeight)
+      .fill("#ffffff");
+
+    paddle.x = paddleXCoordinate;
+    paddle.y = paddleYCoordinate;
+
+    app.stage.addChild(paddle);
+
+    if (whichOne === "right") {
+      rightPaddleRef.current = paddle;
+    } else {
+      leftPaddleRef.current = paddle;
+    }
+  };
+
+  const renderBunnyAsync = async (app: Application<Renderer>) => {
+    const texture = await Assets.load("https://pixijs.com/assets/bunny.png");
+
+    const bunny = new Sprite(texture);
+
+    app.stage.addChild(bunny);
+    bunny.anchor.set(0.5);
+
+    const startingXCoordinate = app.screen.width / 2;
+    const startingYCoordinate = app.screen.height / 2;
+
+    bunny.x = startingXCoordinate;
+    bunny.y = startingYCoordinate;
+
+    let moveSpeedX = Math.random() > 0.5 ? 5 : -5;
+    let moveSpeedY = Math.random() > 0.5 ? 3 : -3;
+
+    app.ticker.add((time) => {
+      bunny.x -= moveSpeedX * time.deltaTime;
+      bunny.y -= moveSpeedY * time.deltaTime;
+      bunny.rotation += 0.1 * time.deltaTime;
+
+      // Make sure we hit the left paddle
+      if (leftPaddleRef.current) {
+        if (bunny.x <= app.screen.x + paddleWidth + paddlePadding) {
+          console.log("bunny x", bunny.x);
+          console.log("app screen x", app.screen.x);
+          const leftPaddleYStart = leftPaddleRef.current.y;
+          const leftPaddleYEnd = leftPaddleRef.current.y + paddleHeight;
+
+          if (bunny.y >= leftPaddleYStart && bunny.y <= leftPaddleYEnd) {
+            moveSpeedX *= -1;
+            if (moveSpeedY < 0) {
+              moveSpeedY -= acceleration / 10;
+            } else {
+              moveSpeedY += acceleration / 10;
+            }
+          } else {
+            // alert("Game over!");
+          }
+        }
+      }
+
+      console.log("acceleration:", acceleration);
+
+      // Make sure we hit the right paddle
+      if (rightPaddleRef.current) {
+        const rightPaddleYStart = rightPaddleRef.current.y;
+        const rightPaddleYEnd = rightPaddleRef.current.y + paddleHeight;
+
+        if (bunny.x >= canvasWidth - (paddleWidth + paddlePadding)) {
+          if (bunny.y >= rightPaddleYStart && bunny.y <= rightPaddleYEnd) {
+            moveSpeedX *= -1;
+            if (moveSpeedY < 0) {
+              moveSpeedY -= acceleration / 10;
+            } else {
+              moveSpeedY += acceleration / 10;
+            }
+          } else {
+            // alert("Game over!");
+          }
+        }
+      }
+
+      // If we hit the top or bottom, we need to bounce off
+      if (bunny.y < 0 || bunny.y > app.screen.height) {
+        moveSpeedY *= -1;
+      }
+    });
+  };
+
+  function getRandomNumberBetween(min: number, max: number) {
+    if (min > max) {
+      throw new Error("min must be less than or equal to max");
+    }
+    return Math.random() * (max - min) + min;
+  }
+
   return (
     <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
       <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
+        <h1>Welcome to Paddle</h1>
+        <div ref={pixiContainerRef}></div>
       </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
     </div>
   );
 }
