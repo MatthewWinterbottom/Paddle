@@ -152,8 +152,6 @@ export default function Home() {
         }
       }
 
-      console.log("acceleration:", acceleration);
-
       // Make sure we hit the right paddle
       if (rightPaddleRef.current) {
         const rightPaddleYStart = rightPaddleRef.current.y;
@@ -179,13 +177,6 @@ export default function Home() {
       }
     });
   };
-
-  function getRandomNumberBetween(min: number, max: number) {
-    if (min > max) {
-      throw new Error("min must be less than or equal to max");
-    }
-    return Math.random() * (max - min) + min;
-  }
 
   return (
     <div className=" items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
