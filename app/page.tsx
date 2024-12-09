@@ -1,7 +1,16 @@
 "use client";
 
-import { Application, Assets, Graphics, Renderer, Sprite } from "pixi.js";
+import {
+  Application,
+  Assets,
+  ContainerChild,
+  Graphics,
+  Renderer,
+  Sprite,
+} from "pixi.js";
 import { useEffect, useRef } from "react";
+import { io, Socket } from "socket.io-client";
+import { toast } from "react-toastify";
 
 export default function Home() {
   const pixiContainerRef = useRef<HTMLDivElement>(null);
@@ -15,6 +24,8 @@ export default function Home() {
   const paddlePadding = 10;
   const paddleSpeed = 5;
   let acceleration = 1;
+  const socketRef = useRef<Socket | null>(null); // WebSocket connection referen
+  const roomIdRef = useRef(null);
 
   useEffect(() => {
     const func = async () => {
@@ -30,6 +41,53 @@ export default function Home() {
         appRef.current = app;
 
         pixiContainerRef.current.appendChild(app.canvas);
+
+        // initialise web socket
+        const socket = io("http://localhost:4444");
+        socketRef.current = socket; // ToDo what is the purpose of this, are we needing to use it?
+
+        socket.on("connect", () => {
+          socket.emit("joinGame");
+        });
+
+        socket.on("gameFound", (args) => {
+          toast("game found with room id:", args.roomId);
+          roomIdRef.current = args.roomId;
+        });
+
+        socket.on("waitingForPlayer", (args) => {
+          toast("waiting for another player, your patience is appreciated");
+        });
+
+        socket.on(
+          "updatePaddle",
+          ({ position, playerId }: { position: number; playerId: string }) => {
+            // We need to update the paddle
+            if (playerId == socket.id) {
+              // We are now dealing with our own user
+            } else {
+              // We are dealing with the other user
+            }
+          },
+        );
+
+        // Type guard to check if a ContainerChild is a Sprite
+        function isSprite(child: ContainerChild): child is Sprite {
+          return child instanceof Sprite;
+        }
+
+        socket.on("updateBall", ({ x, y }) => {
+          // update the ball's position
+          if (app.stage.children.some(isSprite)) {
+            const bunny = app.stage.children.find(
+              (child) => child instanceof Sprite,
+            ) as Sprite;
+            if (bunny) {
+              bunny.x = x;
+              bunny.y = y;
+            }
+          }
+        });
 
         renderPaddle(app, "left");
         renderPaddle(app, "right");
@@ -72,6 +130,14 @@ export default function Home() {
             );
 
             acceleration += Math.min(acceleration * 0.1, 1);
+          }
+
+          // Send paddle position to the server
+          if (socket && paddleRef.current && roomIdRef.current) {
+            socket.emit("movePaddle", {
+              roomId: roomIdRef.current,
+              position: paddleRef.current.y,
+            });
           }
         });
       }

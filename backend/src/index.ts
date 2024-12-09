@@ -24,7 +24,7 @@ app.get("/", (req: any, res: any) => {
   res.send("Paddle game backend is running!");
 });
 
-const PORT = 3000;
+const PORT = 4444;
 
 server.listen(PORT, () => {
   console.log(`Server listening on http://localhost:${PORT}`);
